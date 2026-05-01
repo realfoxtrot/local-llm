@@ -1,0 +1,34 @@
+# Git ignore patterns for local-llm-server
+
+# Environment secrets
+.env
+*.pem
+*.key
+
+# Model weights (do not commit multi-gigabyte files)
+models/*
+!models/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Node
+node_modules/
+package-lock.json
+
+# Benchmark temp files
+/tmp/benchmark_payload.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

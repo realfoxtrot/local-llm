@@ -1,0 +1,103 @@
+services:
+  vllm-pp:
+    image: vllm/vllm-openai:latest
+    container_name: vllm-server-pp
+    restart: unless-stopped
+    runtime: nvidia
+    ipc: host
+    ports:
+      - "${VLLM_PORT:-8000}:${VLLM_PORT:-8000}"
+    environment:
+      - HF_TOKEN=${HF_TOKEN}
+      - VLLM_WORKER_MULTIPROC_METHOD=${VLLM_WORKER_MULTIPROC_METHOD:-spawn}
+      - VLLM_ATTENTION_BACKEND=${VLLM_ATTENTION_BACKEND:-FLASH_ATTN}
+      - CUDA_DEVICE_ORDER=PCI_BUS_ID
+      - NCCL_P2P_DISABLE=1
+      - NCCL_IB_DISABLE=1
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+      # PP-specific: disable custom all-reduce for PCIe GPUs
+      - VLLM_USE_V1=0
+    volumes:
+      - ./models:/models
+      - huggingface-cache:/root/.cache/huggingface
+      - vllm-cache:/root/.cache/vllm
+    command:
+      - --model
+      - ${VLLM_MODEL:-RedHatAI/Llama-3.3-70B-Instruct-quantized.w4a16}
+      # Pipeline Parallelism: splits model layers across GPUs
+      # GPU 0 gets first half of layers, GPU 1 gets second half
+      # Better throughput than TP on PCIe-connected consumer GPUs
+      - --pipeline-parallel-size
+      - "${PIPELINE_PARALLEL_SIZE:-2}"
+      - --tensor-parallel-size
+      - "${TENSOR_PARALLEL_SIZE:-1}"
+      - --gpu-memory-utilization
+      - "${GPU_MEMORY_UTILIZATION:-0.92}"
+      - --max-model-len
+      - "${MAX_MODEL_LEN:-32768}"
+      - --max-num-seqs
+      - "${MAX_NUM_SEQS:-128}"
+      - --max-num-batched-tokens
+      - "${MAX_NUM_BATCHED_TOKENS:-8192}"
+      - --host
+      - ${VLLM_HOST:-0.0.0.0}
+      - --port
+      - "${VLLM_PORT:-8000}"
+      - --served-model-name
+      - ${SERVED_MODEL_NAME:-llama-3.3-70b}
+      - --api-key
+      - ${VLLM_API_KEY:-change-me}
+      - --dtype
+      - auto
+      - --enforce-eager
+      - --disable-log-requests
+      - --enable-prefix-caching
+      - --trust-remote-code
+      # Disable custom all-reduce for PCIe GPUs (improves stability)
+      - --disable-custom-all-reduce
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${VLLM_PORT:-8000}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 300s
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      stack:
+        soft: 67108864
+        hard: 67108864
+
+  nginx:
+    image: nginx:alpine
+    container_name: llm-nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:${NGINX_HTTP_PORT:-80}"
+    environment:
+      - VLLM_HOST=vllm-pp
+      - VLLM_PORT=${VLLM_PORT:-8000}
+      - SERVER_HOSTNAME=${SERVER_HOSTNAME:-localhost}
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      vllm-pp:
+        condition: service_healthy
+    command: >
+      sh -c "envsubst '$$VLLM_HOST $$VLLM_PORT $$SERVER_HOSTNAME'
+      < /etc/nginx/nginx.conf
+      > /etc/nginx/nginx.conf.tmp
+      && mv /etc/nginx/nginx.conf.tmp /etc/nginx/nginx.conf
+      && nginx -g 'daemon off;'"
+
+volumes:
+  huggingface-cache:
+  vllm-cache:

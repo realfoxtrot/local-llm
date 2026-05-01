@@ -1,0 +1,26 @@
+vllm:
+  model: "RedHatAI/Llama-3.3-70B-Instruct-quantized.w4a16"
+  served_model_name: "llama-3.3-70b"
+  
+  # 2x RTX 3090 specific tuning
+  tensor_parallel_size: 2
+  pipeline_parallel_size: 1
+  gpu_memory_utilization: 0.92
+  
+  # Context & batching
+  max_model_len: 32768
+  max_num_seqs: 128
+  max_num_batched_tokens: 8192
+  
+  # Performance
+  dtype: "auto"
+  enable_prefix_caching: true
+  enforce_eager: true
+  disable_log_requests: true
+  
+  # Security
+  api_key: "${VLLM_API_KEY}"
+  
+  # Stability flags for consumer GPUs
+  trust_remote_code: true
+  disable_custom_all_reduce: false  # set to true if NCCL issues on PCIe
