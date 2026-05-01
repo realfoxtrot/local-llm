@@ -53,10 +53,10 @@ fi
 
 # Docker Compose up
 if [[ "$MODE" == "detached" || "$MODE" == "-d" ]]; then
-    docker compose -f "$COMPOSE_FILE" up -d
+    docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
     log_info "Server started in detached mode"
     log_info "View logs: docker compose -f $COMPOSE_FILE logs -f"
 else
     log_info "Starting in attached mode (Ctrl+C to stop)..."
-    docker compose -f "$COMPOSE_FILE" up
+    docker compose -f "$COMPOSE_FILE" up --remove-orphans
 fi
