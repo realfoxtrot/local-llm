@@ -45,7 +45,6 @@ services:
       - --dtype
       - auto
       - --enforce-eager
-      - --disable-log-requests
       - --enable-prefix-caching
       - --trust-remote-code
     deploy:
